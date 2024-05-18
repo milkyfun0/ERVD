@@ -92,3 +92,7 @@ We have uploaded all the pre-trained models and their logs to hugging face,Click
 
 
 
+# Acknowledge
+
+Our code is based on [SCFR](https://github.com/xdplay17/SCFR) [TinyClip](https://github.com/wkcn/TinyCLIP) [AMFMN](https://github.com/xiaoyuan1996/AMFMN)[CLIP](https://github.com/openai/CLIP), [OpenCLIP](https://github.com/mlfoundations/open_clip), [d2l.ai](https://zh-v2.d2l.ai/index.html) and [PyTorch](https://github.com/pytorch/pytorch). Thank contributors for their awesome contribution!
+
