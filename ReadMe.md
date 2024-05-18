@@ -82,7 +82,7 @@
 2.  change "opt = get_options(model_name="base_vit")" to "opt = get_options(model_name="base_distill")"
 3. run it :wink:
 
-**If you want to test other models, just add the model to model/model_name/ and the relevant weight configuration to model_data/model_name/,Note that the underlying network requires rewriting the show() function and encode() and forward**
+**If you want to test other models, just add the model to model/model_name/ and the relevant weight configuration to model_data/model_name/,Note that the underlying network requires rewriting the show() function and encode() and forward()**
 
 ## Trained Model Parameter
 
