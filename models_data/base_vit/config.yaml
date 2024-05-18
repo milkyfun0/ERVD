@@ -1,0 +1,83 @@
+model:
+  name: "base_vit"
+  pretrained: True
+  hash_bit: 128
+  dis_type: "hamming" # validate
+  CLIP:
+    config_path: "models_data/base_vit/TinyCLIP-ViT-39M-16-Text-19M-YFCC15M/"
+    save_name: "TinyCLIP-ViT-39M-16-Text-19M-YFCC15M.pt"
+    pre_train: True
+
+optimizer:
+  type: "sgd" # choose optimizer, view detail in optimizer.py
+  max_grad_clip: 2
+  norm_type: 2
+  adam:
+    lr: 0.0001
+    betas: (0.9, 0.999) # adam default
+    norm_type: 2
+    eps: "1e-6" # prevents data from crossing boundaries when the model precision is float16
+    weight_decay: "5e-4"
+  sgd:
+    lr: 0.001
+    weight_decay: "1e-4"
+    momentum: 0.9
+
+  lr_scheduler_type: "none" # step or cos or none
+  step: # StepLR
+    decay_param: 0.7
+    decay_epoch: 50
+    restart_epoch: -1 # -1 is not restart
+  cos: # CosineAnnealingWarmRestarts
+    T_0: 3
+    T_mult: 2
+    eta_min: 0.0001
+
+loss:
+  margin: 0.5 # margin in triple loss
+  T: 0.1 # temperature
+  base: 1 # contrastive
+  alpha: 2 # triple
+  beta: 2 # global
+  gamma: 0.3 # local 0.3
+
+train:
+  convert_weights:  # If the memory is insufficient, float16 precision mode is turned on, but some precision is lost
+  epoch: 100
+  batch_size: 128
+  num_works: 4
+
+dataset:
+  type: "UCMD"
+  augment: False # Whether to enable data enhancement
+  NWEP_RESISC45:
+    num_class: 45
+    name: "NWEP_RESISC45"
+    path: "dataset/NWPU_RESISC45/" # dataset path
+    metric:
+      M: -1
+      R: 700 # each class: 700
+      P: 50
+  AID:
+    num_class: 30
+    name: "AID"
+    path: "dataset/AID/"
+    metric:
+      M: -1
+      R: 500 # each class: 220-420
+      P: 50
+  UCMD:
+    num_class: 21
+    name: "UCMD"
+    path: "dataset/UCMD/"
+    metric:
+      M: -1
+      R: 100 # each class: 100
+      P: 50
+
+logs:
+  start_eval_epoch: 10 # How many rounds to start testing
+  eval_step: 1 #  How many rounds of testing
+  save_state_dict: True # Save weight or not
+  store_path: "logs/base_vit/" # Path to save the weight
+  analysis_path: "base_vit/" # Model analysis folder
