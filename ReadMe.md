@@ -2,7 +2,8 @@
 
 ## Abstract
 
-
+- ***18 May 2024*** models have been integrated into huggging face
+- ***18 May 2024*** This is preliminary released code, including training code and checkpoints.
 
 ## Project file structure
 
