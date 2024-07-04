@@ -85,11 +85,6 @@
 
 **If you want to test other models, just add the model to model/model_name/ and the relevant weight configuration to model_data/model_name/,Note that the underlying network requires rewriting the show() function and encode() and forward()**
 
-## Trained Model Parameter
-
-We have uploaded all the pre-trained models and their logs to Hugging Face,Click [Here](https://huggingface.co/milkyfun0/TRGS-Distill-Augment) :smile:. we share the model trained on the training set, which includes the weights of the base_vit and its base_distill 
-
-
 
 
 
