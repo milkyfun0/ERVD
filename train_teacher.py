@@ -15,12 +15,8 @@ from tqdm import tqdm
 
 import utils
 from dataset import get_loader
-from models.base_cnn import base_cnn
 from models.base_distill import base_distall
-from models.base_distill2 import base_distall2
 from models.base_vit import base_vit
-from models.base_vit_plus import base_vit_plus
-from models.base_work import base_work
 from optimizer import Optimizer
 from utils import save_log_txt, validate_with_no_cross, same_seeds, get_options, get_device
 
@@ -49,13 +45,11 @@ def train(opt, model, train_loader, test_loader, dataset_loader, writer):
             time.localtime()) + " Epoch: [{:0>3d}/{:0>3d}] {} time: {:<5.2f}s\n".format(
             epoch, opt["train"]["epoch"], loss_memory.to_string(), end_time - start_time)
         save_log_txt(writer, mark_log)
-
         if epoch % opt["logs"]["eval_step"] == 0 and epoch >= opt["logs"]["start_eval_epoch"]:
             torch.cuda.empty_cache()
             if loss_memory.average()["total_loss"] < best_metric_dict["total_loss"]:
-                metric_dict = validate_with_no_cross(opt, model, dataset_loader, test_loader)
-                save_log_txt(writer, metric_dict)
-                save_log_txt(writer,"%.4f----->%.4f\n" % (best_metric_dict["total_loss"], loss_memory.average()["total_loss"]))
+                save_log_txt(writer,
+                             "%.4f----->%.4f\n" % (best_metric_dict["total_loss"], loss_memory.average()["total_loss"]))
                 best_metric_dict = loss_memory.average()
                 if opt["logs"]["save_state_dict"]:
                     if os.path.isfile(model_name):
@@ -68,7 +62,6 @@ def train(opt, model, train_loader, test_loader, dataset_loader, writer):
                     else:
                         state_dict = model.state_dict()
                     torch.save(state_dict, model_name)
-            # mark_validate(opt, epoch, metric_dict, best_metric_dict, writer)
 
 
 def main(opt, gpus=False):
@@ -80,18 +73,10 @@ def main(opt, gpus=False):
     writer = SummaryWriter(log_dir=opt["logs"]["store_path"] + "%s%s_%s_%s_%d_%s/" % (
         augment, opt["model"]["name"], "float16" if opt["train"]["convert_weights"] else "float32",
         opt["dataset"]["type"], opt["model"]["hash_bit"], filename_suffix))
-    if opt["model"]["name"] == "base_work":
-        model = base_work.Network(opt=opt, writer=writer)
-    elif opt["model"]["name"] == "base_vit":
+    if opt["model"]["name"] == "base_vit":
         model = base_vit.Network(opt=opt, writer=writer)
-    elif opt["model"]["name"] == "base_vit_plus":
-        model = base_vit_plus.Network(opt=opt, writer=writer)
     elif opt["model"]["name"] == "base_distill":
         model = base_distall.Network(opt=opt, writer=writer)
-    elif opt["model"]["name"] == "base_distill2":
-        model = base_distall2.Network(opt=opt, writer=writer)
-    elif opt["model"]["name"] == "base_cnn":
-        model = base_cnn.Network(opt=opt, writer=writer)
     else:
         print("Unknown model")
         sys.exit()

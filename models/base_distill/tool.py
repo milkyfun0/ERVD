@@ -5,18 +5,13 @@
 # @File    : tool.py
 # @Description :
 import json
-import math
-
 from collections import OrderedDict
-from typing import Tuple, Union, Optional
+from typing import Optional
 
-import numpy as np
 import torch
-import torch.nn.functional as F
 from torch import nn
+
 from Collection import VarCollection
-from loss import calc_triple_loss
-from utils import calc_distance
 
 
 class LayerNorm(nn.LayerNorm):
@@ -24,38 +19,13 @@ class LayerNorm(nn.LayerNorm):
 
     def forward(self, x: torch.Tensor):
         orig_type = x.dtype
-        ret = super().forward(x.type(torch.float32))
+        ret = super(LayerNorm, self).forward(x.type(torch.float32))
         return ret.type(orig_type)
 
 
 class QuickGELU(nn.Module):
     def forward(self, x: torch.Tensor):
         return x * torch.sigmoid(1.702 * x)
-
-
-class Adapter(nn.Module):
-    def __init__(self, embed_dim):
-        super(Adapter, self).__init__()
-
-        self.down_mlp = nn.Sequential(
-            nn.Linear(embed_dim, embed_dim * 2),
-            QuickGELU(),
-        )
-        self.layer_norm = LayerNorm(embed_dim * 2)
-        self.up_mlp = nn.Sequential(
-            nn.Linear(embed_dim * 2, embed_dim),
-            QuickGELU(),
-        )
-
-    def init_weights(self):
-        nn.init.kaiming_normal_(self.down_mlp[0].weight)
-        nn.init.kaiming_normal_(self.up_mlp[0].weight)
-
-    def forward(self, x):
-        output = self.down_mlp(x)
-        output = self.layer_norm(output)
-        output = self.up_mlp(output)
-        return output + x
 
 
 class ResidualAttentionBlock(nn.Module):
@@ -100,15 +70,6 @@ class Transformer(nn.Module):
         for i in range(self.layers):
             if i == self.layers // 2:
                 x = x.detach()
-            #     x = self.peg(x)
-            # x = torch.cat(
-            #     [x.detach(),
-            #      self.local_embedding.to(x.dtype) + torch.zeros(x.shape[0], 1, x.shape[-1], dtype=x.dtype,
-            #                                                     device=x.device)], dim=1)
-            # if i == self.layers // 2.5:
-            #     low.sh = self.lowblocks(x.detach())
-            # if i == self.layers // 1.25:
-            #     x = self.linear(torch.cat((x, low.sh), dim=-1))
             x = self.resblocks[i](x, attn_mask)
 
         return x

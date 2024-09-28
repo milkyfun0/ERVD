@@ -291,52 +291,6 @@ class CutMix(nn.Module):
         return augment_images.to(target_device).to(target_dtype)
 
 
-def load_image(image_paths):
-    transform = transforms.Compose([transforms.ToTensor()])
-    if isinstance(image_paths, list):
-        # 如果是列表，则逐个处理每张图片
-        images = []
-        for path in image_paths:
-            img = Image.open(path)  # 读取图片
-            img = transform(img)  # 转换为张量
-            images.append(img)
-        return torch.stack(images)  # 返回张量列表
-    else:
-        # 如果是单个路径
-        img = Image.open(image_paths)  # 读取图片
-        return transform(img)
-
-
-def show_image(image_tensor):
-    """
-    将张量形式的图片展示出来并沾满整个画布
-    """
-
-    def clip_image_data(image):
-        """
-        将输入图像裁剪到 imshow 所需的有效范围
-        :param image: 输入图像（支持浮点数或整数）
-        :return: 裁剪后的图像
-        """
-        if np.issubdtype(image.dtype, np.floating):  # 如果是浮点类型，范围 [0, 1]
-            image = np.clip(image, 0.0, 1.0)
-        elif np.issubdtype(image.dtype, np.integer):  # 如果是整数类型，范围 [0, 255]
-            image = np.clip(image, 0, 255)
-        return image
-
-    image_np = image_tensor.permute(1, 2, 0).numpy()  # 将张量的通道维度转换为最后一个维度，并转为 numpy 数组
-    image_np = clip_image_data(image_np)
-
-    fig, ax = plt.subplots(figsize=(6, 6))  # 创建一个6x6的画布
-    ax.imshow(image_np)
-    ax.axis('off')  # 不显示坐标轴
-
-    # 调整子图位置参数，确保图像沾满整个画布
-    fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
-
-    plt.show()
-
-
 class PatchMask(nn.Module):
     def __init__(self, max_epoch, image_size=224, patch_size=16, channels=3):
         """
@@ -399,6 +353,52 @@ class PatchMask(nn.Module):
         images_augment = images_augment + self.alpha * image_mask * (images - images_augment)
         images_augment = torch.flip(images_augment, dims=[0])
         return images_augment.to(target_device).to(target_dtype)
+
+
+def load_image(image_paths):
+    transform = transforms.Compose([transforms.ToTensor()])
+    if isinstance(image_paths, list):
+        # 如果是列表，则逐个处理每张图片
+        images = []
+        for path in image_paths:
+            img = Image.open(path)  # 读取图片
+            img = transform(img)  # 转换为张量
+            images.append(img)
+        return torch.stack(images)  # 返回张量列表
+    else:
+        # 如果是单个路径
+        img = Image.open(image_paths)  # 读取图片
+        return transform(img)
+
+
+def show_image(image_tensor):
+    """
+    将张量形式的图片展示出来并沾满整个画布
+    """
+
+    def clip_image_data(image):
+        """
+        将输入图像裁剪到 imshow 所需的有效范围
+        :param image: 输入图像（支持浮点数或整数）
+        :return: 裁剪后的图像
+        """
+        if np.issubdtype(image.dtype, np.floating):  # 如果是浮点类型，范围 [0, 1]
+            image = np.clip(image, 0.0, 1.0)
+        elif np.issubdtype(image.dtype, np.integer):  # 如果是整数类型，范围 [0, 255]
+            image = np.clip(image, 0, 255)
+        return image
+
+    image_np = image_tensor.permute(1, 2, 0).numpy()  # 将张量的通道维度转换为最后一个维度，并转为 numpy 数组
+    image_np = clip_image_data(image_np)
+
+    fig, ax = plt.subplots(figsize=(6, 6))  # 创建一个6x6的画布
+    ax.imshow(image_np)
+    ax.axis('off')  # 不显示坐标轴
+
+    # 调整子图位置参数，确保图像沾满整个画布
+    fig.subplots_adjust(left=0, right=1, top=1, bottom=0)
+
+    plt.show()
 
 
 if __name__ == '__main__':

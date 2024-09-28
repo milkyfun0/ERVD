@@ -80,32 +80,6 @@ def calc_contrastive_loss_part(
     return loss.mean()
 
 
-# def calc_triple_loss(features: torch.Tensor, labels, margin: torch.float):
-#     """
-#      learn from: Exploring a Fine-Grained Multiscale Method for Cross-Modal Remote Sensing Image Retrieval
-#     :param labels:
-#     :param features:
-#     :param margin:
-#     有问题，这里：triple0（自己写）
-#     :return:
-#     """
-#     scores = calc_distance(features, features, dis_type="batch_dot")
-#
-#     image_len, text_len = scores.shape
-#     assert image_len == text_len
-#     positive = (labels.reshape(-1, 1) == labels.reshape(1, -1)).to(torch.int32)
-#     i2t_positive = positive
-#     t2i_positive = positive
-#     mask = 1 - positive  # torch.eye(image_len, device=scores.device)
-#
-#     loss_i2t = (margin + scores - i2t_positive).clamp(min=0) * mask + (1 - scores).clamp(min=0) * (1 - mask)
-#     loss_t2i = (margin + scores - t2i_positive).clamp(min=0) * mask + (1 - scores).clamp(min=0) * (1 - mask)
-#
-#     # loss = (loss_i2t + loss_t2i) / len(loss_t2i)^2
-#     loss = (loss_i2t.sum() + loss_t2i.sum()) / len(loss_t2i) ** 2
-#
-#     return loss
-
 def calc_triple_loss(features: torch.Tensor, labels, margin: torch.float):
     """
     learn from git from SCFR : https://github.com/xdplay17/SCFR
@@ -144,28 +118,6 @@ def calc_cluster_loss(feature: torch.Tensor, centers: torch.Tensor, labels: torc
     return loss_mean
 
 
-def calc_loss(opt, feature: torch.Tensor, centers: torch.Tensor, labels: torch.Tensor, writer=None, step=0):
-    con_loss = calc_contrastive_loss(feature, feature, label_row=labels, label_col=labels, mask_diag=True,
-                                     t=opt["loss"]["T"])
-    # cen_loss = calc_cluster_loss(feature, centers, labels, opt["loss"]["margin"], opt["dataset"]["num_class"])
-
-    cen_loss = calc_triple_loss(calc_distance(feature, feature, "dot"), opt["loss"]["margin"])
-
-    Q_loss = (feature.abs() - 1).pow(2).mean()
-
-    loss = con_loss + opt["loss"]["alpha"] * cen_loss + opt["loss"]["beta"] * Q_loss
-    # print(con_loss, cen_loss, Q_loss)
-
-    writer.add_scalar("loss/con_loss", con_loss.detach().cpu().item(), step)
-    writer.add_scalar("loss/cen_loss", cen_loss.detach().cpu().item(), step)
-    writer.add_scalar("loss/Q_loss", Q_loss.detach().cpu().item(), step)
-    writer.add_scalar("loss/con_loss", con_loss.detach().cpu().item(), step)
-
-    return {
-        "total_loss": loss,
-    }
-
-
 def calc_cls_loss(logistic: torch.Tensor, labels: torch.Tensor):
     """
     CrossEntropyLoss; if dataset distribute is not balanced please use focal loss: $-(1-p_t)^\\gamma log(p_t) $
@@ -182,9 +134,3 @@ def calc_cls_loss(logistic: torch.Tensor, labels: torch.Tensor):
 def calc_l2_loss(feature_student: torch.Tensor, feature_teacher: torch.Tensor):
     distance = torch.norm(feature_student - feature_teacher)
     return distance.sum() / feature_student.size(0)
-# if __name__ == '__main__':
-#     opt = get_options(model_name="base_work")
-#     feature = torch.load("feature.pt")
-#     label = torch.load("label.pt")
-#     center = torch.load("center.pt")
-#     calc_loss(opt=opt, feature=feature, centers=center, labels=label)

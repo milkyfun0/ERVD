@@ -4,15 +4,12 @@
 # @Author  : CaoQixuan
 # @File    : base_work.py
 # @Description :
-import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from dataset import Augment
-from loss import calc_contrastive_loss, calc_triple_loss, calc_cls_loss
+from loss import calc_contrastive_loss, calc_triple_loss
 from models.base_vit.tool import load_clip_from_json
-from models.common import LocalSelect
-from utils import params_count, save_log_txt, get_options, calc_distance
+from utils import params_count, save_log_txt
 
 
 class Network(nn.Module):
@@ -28,9 +25,6 @@ class Network(nn.Module):
         self.writer = writer
         self.augment = Augment(opt, self.visual_config["image_size"], self.visual_config["patch_size"])
         self.hash_proj = nn.Linear(self.visual.output_dim, opt["model"]["hash_bit"])
-        # self.localSelect = LocalSelect(self.visual_config["image_size"], self.visual_config["patch_size"],
-        #                                window_size=7, dim=self.visual_config["width"],
-        #                                hash_bit=opt["model"]["hash_bit"])
         self.initialize()
 
     def show(self):

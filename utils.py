@@ -6,10 +6,8 @@
 # @Description :
 import argparse
 import gc
-import json
 import os
 import random
-import sys
 import time
 
 import numpy
@@ -345,51 +343,3 @@ def validate_with_no_cross(opt, model, train_loader, test_loader):
                               metric_dict=opt["dataset"][opt["dataset"]["type"]]["metric"])
     # return validate_on_tensor(sim.T, test_labels, train_labels,
     #                           metric_dict=opt["dataset"][opt["dataset"]["type"]]["metric"])
-# @torch.no_grad()
-# def validate_with_no_cross(opt, model, train_loader, test_loader):
-#     """
-#     :param train_loader:
-#     :param test_loader:
-#     :param model:
-#     :param opt:
-#     :return:
-#     """
-#     model_device = get_device()
-#     train_len = len(train_loader.dataset)
-#     test_len = len(test_loader.dataset)
-#     batch_size = test_loader.batch_size
-#     data_type = torch.float16
-#     embedding_dim = opt["model"]["hash_bit"]
-#
-#     sim = torch.empty((train_len, test_len), device=model_device, dtype=data_type)
-#     train_labels = torch.empty(train_len, device=model_device, dtype=torch.int16)
-#     test_labels = torch.empty(test_len, device=model_device, dtype=torch.int16)
-#
-#     test_features = torch.empty((test_len, embedding_dim), device=model_device, dtype=data_type)
-#
-#     for data_pair, i in zip(test_loader, tqdm(range(len(test_loader)))):
-#         if type(model) is torch.nn.DataParallel:
-#             features = model.module.encode(data_pair)
-#         else:
-#             features = model.encode(data_pair)
-#         batch_len_image = len(features)
-#         test_features[batch_size * i:batch_size * i + batch_len_image] = features
-#         test_labels[batch_size * i:batch_size * i + batch_len_image] = data_pair["label"].to(model_device)
-#
-#     for data_pair, i in zip(train_loader, tqdm(range(len(train_loader)))):
-#         torch.cuda.empty_cache()
-#         gc.collect()
-#         if type(model) is torch.nn.DataParallel:
-#             features = model.module.encode(data_pair)
-#         else:
-#             features = model.encode(data_pair)
-#         batch_len_image = len(features)
-#         train_labels[batch_size * i:batch_size * i + batch_len_image] = data_pair["label"].to(model_device)
-#         sim[batch_size * i:batch_size * i + batch_len_image, :] = calc_distance(features.to(data_type), test_features,
-#                                                                                 dis_type=opt["model"]["dis_type"])
-#
-#     return validate_on_tensor(sim.T.cpu(), test_labels.cpu(), train_labels.cpu(),
-#                               metric_dict=opt["dataset"][opt["dataset"]["type"]]["metric"])
-#     # return validate_on_tensor(sim.T, test_labels, train_labels,
-#     #                           metric_dict=opt["dataset"][opt["dataset"]["type"]]["metric"])
-# # #

@@ -9,22 +9,16 @@ import os
 import sys
 import time
 
-from tqdm import tqdm
-
 # os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # multi gpu
 import torch
+from torch.cuda.amp import GradScaler
 from torch.utils.tensorboard import SummaryWriter
-from torch.cuda.amp import autocast, GradScaler
-import torch.distributed as dist
+from tqdm import tqdm
 
 import utils
 from dataset import get_loader
-from models.base_cnn import base_cnn
-from models.base_vit import base_vit
-from models.base_work import base_work
-from models.base_vit_plus import base_vit_plus
 from models.base_distill import base_distall
-from models.base_distill2 import base_distall2
+from models.base_vit import base_vit
 from optimizer import Optimizer
 from utils import save_log_txt, mark_validate, validate_with_no_cross, same_seeds, get_options, get_device
 
@@ -80,18 +74,10 @@ def main(opt, gpus=False):
     writer = SummaryWriter(log_dir=opt["logs"]["store_path"] + "%s%s_%s_%s_%d_%s/" % (
         augment, opt["model"]["name"], "float16" if opt["train"]["convert_weights"] else "float32",
         opt["dataset"]["type"], opt["model"]["hash_bit"], filename_suffix))
-    if opt["model"]["name"] == "base_work":
-        model = base_work.Network(opt=opt, writer=writer)
-    elif opt["model"]["name"] == "base_vit":
+    if opt["model"]["name"] == "base_vit":
         model = base_vit.Network(opt=opt, writer=writer)
-    elif opt["model"]["name"] == "base_vit_plus":
-        model = base_vit_plus.Network(opt=opt, writer=writer)
     elif opt["model"]["name"] == "base_distill":
         model = base_distall.Network(opt=opt, writer=writer)
-    elif opt["model"]["name"] == "base_distill2":
-        model = base_distall2.Network(opt=opt, writer=writer)
-    elif opt["model"]["name"] == "base_cnn":
-        model = base_cnn.Network(opt=opt, writer=writer)
     else:
         print("Unknown model")
         sys.exit()
