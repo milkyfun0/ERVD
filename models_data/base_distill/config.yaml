@@ -6,7 +6,7 @@ model:
   teacher:
     config_path: "models_data/base_distill/teacher/"
     save_name: "base_vit_UCMD_128_0.9920.pt"
-    pre_train: True
+    pre_train: False
   student:
     config_path: "models_data/base_distill/student/"
     save_name: "TinyCLIP-ViT-8M-16-Text-3M-YFCC15M.pt"
@@ -17,13 +17,13 @@ optimizer:
   max_grad_clip: 2
   norm_type: 2
   adam:
-    lr: 0.0005
+    lr: 0.0001
     betas: (0.9, 0.999) # adam default
     norm_type: 2
     eps: "1e-6" # # prevents data from crossing boundaries when the model precision is float16
-    weight_decay: "5e-4"
+    weight_decay: "1e-4"
   sgd:
-    lr: 0.001
+    lr: 0.0005
     weight_decay: "1e-4"
     momentum: 0.9
 
@@ -38,7 +38,7 @@ optimizer:
     eta_min: 0.0001
 
 loss:
-  margin: 0.4  # margin in triple loss
+  margin: 0.4 # margin in triple loss
   T: 0.1  # temperature
   base: 1 # contrast
   alpha: 2 # triple
@@ -49,11 +49,11 @@ train:
   convert_weights: False # float16 or float32; if GPU Memory is not enough or need faster, please open it; generally lower 0.002-0.005
   epoch: 300
   batch_size: 64
-  num_works: 2
-
+  num_works: 4
 dataset:
   type: "UCMD"
   augment: True  # Whether to enable data enhancement
+  aug_type: ""
   NWEP_RESISC45:
     num_class: 45
     name: "NWEP_RESISC45"
@@ -79,7 +79,7 @@ dataset:
       R: 100 # each class: 100
       P: 50
 logs:
-  start_eval_epoch: 0 # How many rounds to start testing
+  start_eval_epoch: 200 # How many rounds to start testing
   eval_step: 1 #  How many rounds of testing
   save_state_dict: True  # Save weight or not
   store_path: "logs/base_distill/" # Path to save the weight

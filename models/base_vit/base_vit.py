@@ -4,12 +4,15 @@
 # @Author  : CaoQixuan
 # @File    : base_work.py
 # @Description :
+import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from dataset import Augment
-from loss import calc_contrastive_loss, calc_triple_loss
+from loss import calc_contrastive_loss, calc_triple_loss, calc_cls_loss
 from models.base_vit.tool import load_clip_from_json
-from utils import params_count, save_log_txt
+from models.common import LocalSelect
+from utils import params_count, save_log_txt, get_options, calc_distance
 
 
 class Network(nn.Module):
@@ -23,13 +26,16 @@ class Network(nn.Module):
             writer=writer
         )
         self.writer = writer
-        self.augment = Augment(self.visual_config["image_size"], self.visual_config["patch_size"])
+        self.augment = Augment(opt, self.visual_config["image_size"], self.visual_config["patch_size"])
         self.hash_proj = nn.Linear(self.visual.output_dim, opt["model"]["hash_bit"])
+        # self.localSelect = LocalSelect(self.visual_config["image_size"], self.visual_config["patch_size"],
+        #                                window_size=7, dim=self.visual_config["width"],
+        #                                hash_bit=opt["model"]["hash_bit"])
         self.initialize()
 
     def show(self):
         info = "--- Base ViT Network {}bits {} ---\n".format(self.opt["model"]["hash_bit"],
-                                                                self.opt["dataset"]["type"])
+                                                             self.opt["dataset"]["type"])
         total = params_count(self)
         info += ' Model has {} parameters\n'.format(total)
         save_log_txt(self.writer, info)

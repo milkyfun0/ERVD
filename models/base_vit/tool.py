@@ -12,6 +12,7 @@ import torch
 from torch import nn
 
 from Collection import VarCollection
+from models.common import Adapter
 
 freeze_number = 6
 
@@ -44,6 +45,9 @@ class ResidualAttentionBlock(nn.Module):
         self.ln_2 = LayerNorm(d_model)
         self.attn_mask = attn_mask
         self.is_adaptive = is_adaptive
+        if is_adaptive:
+            self.adapter = Adapter(d_model)
+            self.ln_3 = LayerNorm(d_model)
 
     @VarCollection("att_weight")
     def attention(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor] = None):
@@ -53,8 +57,15 @@ class ResidualAttentionBlock(nn.Module):
         return x  # 三个x表示Q K V计算值，x最后维度=n_head*d_model
 
     def forward(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor] = None):
-        x = x + self.attention(self.ln_1(x), attn_mask=attn_mask)
-        output = x + self.mlp(self.ln_2(x))
+        if self.is_adaptive:
+            step_1 = x + self.attention(self.ln_1(x), attn_mask=attn_mask)
+            step_2 = self.mlp(self.ln_2(step_1))
+            step_3 = step_2 + step_1
+            step_4 = self.adapter(step_3)
+            output = self.ln_3(step_4 + step_1)
+        else:
+            x = x + self.attention(self.ln_1(x), attn_mask=attn_mask)
+            output = x + self.mlp(self.ln_2(x))
         return output
 
 
@@ -118,6 +129,11 @@ class VisionTransformer(nn.Module):
             nn.init.normal_(block.attn.out_proj.weight, std=proj_std)
             nn.init.normal_(block.mlp.c_fc.weight, std=fc_std)
             nn.init.normal_(block.mlp.c_proj.weight, std=proj_std)
+        # for block in self.transformer.lowblocks:
+        #     nn.init.normal_(block.attn.in_proj_weight, std=attn_std)
+        #     nn.init.normal_(block.attn.out_proj.weight, std=proj_std)
+        #     nn.init.normal_(block.mlp.c_fc.weight, std=fc_std)
+        #     nn.init.normal_(block.mlp.c_proj.weight, std=proj_std)
 
     def forward(self, x: torch.Tensor):
         # x=[1,3,224,224]
@@ -220,3 +236,12 @@ def load_clip_from_json(opt, config_path: str, pre_train: bool = True, writer=No
         model.load_state_dict(weights_map, strict=True)
 
     return model, model_cfg["vision_cfg"]
+#     x = self.peg(x)
+# x = torch.cat(
+#     [x.detach(),
+#      self.local_embedding.to(x.dtype) + torch.zeros(x.shape[0], 1, x.shape[-1], dtype=x.dtype,
+#                                                     device=x.device)], dim=1)
+# if i == self.layers // 2.5:
+#     low.sh = self.lowblocks(x.detach())
+# if i == self.layers // 1.25:
+#     x = self.linear(torch.cat((x, low.sh), dim=-1))

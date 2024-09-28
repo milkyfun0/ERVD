@@ -2,18 +2,21 @@
 # -*- coding: utf-8 -*-
 # @Time    : 2024/4/16 上午10:55
 # @Author  : CaoQixuan
-# @File    : teacher.py
+# @File    : tool.py
 # @Description :
 import json
+import math
+
 from collections import OrderedDict
-from typing import Optional
+from typing import Tuple, Union, Optional
 
+import numpy as np
 import torch
+import torch.nn.functional as F
 from torch import nn
-
 from Collection import VarCollection
-from dataset import Augment
-from utils import get_device
+from loss import calc_triple_loss
+from utils import calc_distance
 
 
 class LayerNorm(nn.LayerNorm):
@@ -84,7 +87,7 @@ class ResidualAttentionBlock(nn.Module):
 
 class Transformer(nn.Module):
     def __init__(self, width: int, layers: int, heads: int, attn_mask: torch.Tensor = None, writer=None):
-        super(Transformer, self).__init__()
+        super().__init__()
         self.width = width
         self.layers = layers
         self.writer = writer
@@ -94,15 +97,21 @@ class Transformer(nn.Module):
         # self.linear = nn.Sequential(nn.Linear(2 * width, width), QuickGELU())
 
     def forward(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor] = None):
-        half_feature = []
         for i in range(self.layers):
             if i == self.layers // 2:
                 x = x.detach()
+            #     x = self.peg(x)
+            # x = torch.cat(
+            #     [x.detach(),
+            #      self.local_embedding.to(x.dtype) + torch.zeros(x.shape[0], 1, x.shape[-1], dtype=x.dtype,
+            #                                                     device=x.device)], dim=1)
+            # if i == self.layers // 2.5:
+            #     low.sh = self.lowblocks(x.detach())
+            # if i == self.layers // 1.25:
+            #     x = self.linear(torch.cat((x, low.sh), dim=-1))
             x = self.resblocks[i](x, attn_mask)
-            if i % 2 == 1 and i >= self.layers // 2:
-                half_feature.append(x.detach().permute(1, 0, 2))
 
-        return x, half_feature
+        return x
 
 
 class VisionTransformer(nn.Module):
@@ -131,7 +140,6 @@ class VisionTransformer(nn.Module):
 
         self.writer = writer
         self.initialize_parameters()
-        self.half_feature = None
 
     @property
     def dtype(self):
@@ -163,9 +171,11 @@ class VisionTransformer(nn.Module):
 
         x = x.permute(1, 0, 2)  # NLD -> LND  # [pixel,b,d_model]=[50,1,768]
         # 当实例化时 batch——first默认维false
-        x, self.half_feature = self.transformer(x)  # 多头transformer [50,1,768]
+        x = self.transformer(x)  # 多头transformer [50,1,768]
         x = x.permute(1, 0, 2)  # LND -> NLD  # [1,50,768]
+
         # x = self.codebook(x)
+        self.x = x
 
         x = self.ln_post(x[:, 0, :])  # x[:, 0, :] 将所有信息汇聚到cls token中，只需前面来做下游任务 [1,768]
 
@@ -173,6 +183,56 @@ class VisionTransformer(nn.Module):
             x = x @ self.proj  # 通过学习参数将维度再次融合变成512特征，最终为[1,512]
 
         return x
+
+
+def get_freeze_layers_names():
+    names = [
+        "positional_embedding",
+        "class_embedding",
+        "positional_embedding",
+        "conv1.weight",
+        "conv1.bias",
+    ]
+    for i in range(fr):
+        names.append("transformer.resblocks.{}.attn.in_proj_weight".format(i))
+        names.append("transformer.resblocks.{}.attn.in_proj_bias".format(i))
+        names.append("transformer.resblocks.{}.attn.out_proj.weight".format(i))
+        names.append("transformer.resblocks.{}.attn.out_proj.bias".format(i))
+        names.append("transformer.resblocks.{}.ln_1.weight".format(i))
+        names.append("transformer.resblocks.{}.ln_1.bias".format(i))
+        names.append("transformer.resblocks.{}.mlp.c_fc.weight".format(i))
+        names.append("transformer.resblocks.{}.mlp.c_fc.bias".format(i))
+        names.append("transformer.resblocks.{}.mlp.c_proj.weight".format(i))
+        names.append("transformer.resblocks.{}.mlp.c_proj.bias".format(i))
+        names.append("transformer.resblocks.{}.ln_2.weight".format(i))
+        names.append("transformer.resblocks.{}.ln_2.bias".format(i))
+    return names
+
+
+def trans_standard_static_dict(state_dict: dict):
+    new_dict = {}
+    if "state_dict" in state_dict:
+        state_dict = state_dict["state_dict"]
+
+    for k, v in state_dict.items():
+        if "_image_encoder" in k:
+            new_dict[k[22:]] = v
+        elif "_text_encoder.module." in k:
+            new_dict[k[21:]] = v
+        elif "_logit_scale.module." in k:
+            new_dict[k[20:]] = v
+        elif "module." in k:
+            new_dict[k[7:]] = v
+        else:
+            new_dict[k] = v
+
+    state_dict = {}
+    for k, v in new_dict.items():
+        if "visual." in k:
+            k = k[7:]
+            state_dict[k] = v
+
+    return state_dict
 
 
 def load_clip_from_json(opt, config_path: str, pre_train: bool = True, writer=None):
@@ -190,55 +250,13 @@ def load_clip_from_json(opt, config_path: str, pre_train: bool = True, writer=No
         output_dim=model_cfg["embed_dim"],
         writer=writer
     )
-    return model, model_cfg["vision_cfg"]
-
-
-class Network(nn.Module):
-    def __init__(self, opt, writer=None):
-        super(Network, self).__init__()
-        self.opt = opt
-        self.visual, self.visual_config = load_clip_from_json(
-            opt=opt,
-            config_path=opt["model"]["teacher"]["config_path"],
-            pre_train=False,
-            writer=writer
-        )
-        self.writer = writer
-        self.augment = Augment(opt, self.visual_config["image_size"], self.visual_config["patch_size"])
-        self.hash_proj = nn.Linear(self.visual.output_dim, opt["model"]["hash_bit"])
-        self.half_feature = None
-        self.final_feature = None
-        self.initialize()
-
-    def initialize(self):
-        nn.init.xavier_normal_(self.hash_proj.weight)
-
-    def encode(self, data_pair):
-        model_device = get_device()
-        images = data_pair["image"].to(model_device)
-        output = self.visual(images)
-        self.final_feature = output
-        output = self.hash_proj(output)
-        return output
-
-    def forward(self, images):
-        target_dtype = images.dtype
-        output = self.visual(images.type(self.visual.dtype))
-        output = self.hash_proj(output).type(target_dtype)
-        self.half_feature = [feature.type(target_dtype) for feature in self.visual.half_feature]
-        self.final_feature = output.type(target_dtype)
-        return output
-
-
-def load_teacher_from_json(opt, config_path: str, pre_train: bool = True, writer=None):
-    # print(config_path)
-    with open(config_path + "config.json", 'r') as f:
-        model_cfg = json.load(f)
-
-    model = Network(opt, writer=writer)
     if pre_train:
-        # weights_map = torch.load(config_path + opt["model"]["teacher"]["save_name"])
-        weights_map = torch.load(opt["model"]["teacher"]["save_name"])
+        weights_map = trans_standard_static_dict(torch.load(config_path + "/" + model_cfg["name"]))
+        # freeze_names = get_freeze_layers_names()
+        # for name, param in model.named_parameters():
+        #     if name in freeze_names:
+        #         param.requires_grad = False
+
         model.load_state_dict(weights_map, strict=False)
 
-    return model
+    return model, model_cfg["vision_cfg"]

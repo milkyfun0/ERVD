@@ -15,7 +15,7 @@ from utils import params_count, save_log_txt, convert_weights
 
 
 class AlignModule(nn.Module):
-    def __init__(self, align_number, image_size, patch_size, teacher_width, student_width, alpha=0.5, share=False):
+    def __init__(self, align_number, image_size, patch_size, teacher_width, student_width, alpha=0.1, share=False):
         super(AlignModule, self).__init__()
         self.align_number = align_number
         self.alignModule = nn.ModuleList(
@@ -36,6 +36,7 @@ class Network(nn.Module):
         super(Network, self).__init__()
         self.opt = opt
         self.writer = writer
+
         self.visual_student, self.visual_config = student.load_clip_from_json(
             opt=opt,
             config_path=opt["model"]["student"]["config_path"],
@@ -48,13 +49,13 @@ class Network(nn.Module):
             pre_train=opt["model"]["teacher"]["pre_train"],
             writer=writer
         )
-        self.augment = Augment(self.visual_config["image_size"], self.visual_config["patch_size"])
+        self.augment = Augment(opt=opt, image_size=self.visual_config["image_size"],
+                               patch_size=self.visual_config["patch_size"])
         self.hash_proj_student = nn.Linear(self.visual_student.output_dim, opt["model"]["hash_bit"])
         self.alignModule = AlignModule(
             self.visual_config["layers"] - student.freeze_number - 1, self.visual_config["image_size"],
             self.visual_config["patch_size"], self.network_teacher.visual.width, self.visual_student.width)
         self.initialize()
-
         convert_weights(self.network_teacher)
 
     def show(self):
@@ -81,8 +82,9 @@ class Network(nn.Module):
         output = self.hash_proj_student(output)
         return output
 
-    def forward(self, data_pair, epoch):
-        images, labels = self.augment(data_pair)
+    def forward(self, data_pair, epoch=None):
+        images, labels = self.augment(data_pair, epoch)
+
         total_loss = 0
 
         #
@@ -98,19 +100,19 @@ class Network(nn.Module):
         triple_loss_student = calc_triple_loss(
             feature_student, labels, self.opt["loss"]["margin"]) * self.opt["loss"]["alpha"]
         total_loss += triple_loss_student
-        feature_teacher = self.network_teacher(images).detach()
         #
+        feature_teacher = self.network_teacher(images).detach()
         global_align_loss = calc_l2_loss(feature_student, feature_teacher.detach()) * self.opt["loss"]["beta"]
         total_loss += global_align_loss
-
+        #
         low_align_loss = self.alignModule(
             self.network_teacher.half_feature, self.visual_student.half_feature) * self.opt["loss"]["gamma"]
         total_loss += low_align_loss
-
+        #
         return {
             "total_loss": total_loss,
             "con_loss_student": con_loss_student,
             "triple_loss_student": triple_loss_student,
             "global_align_loss": global_align_loss,
-            "low_align_loss": low_align_loss
+            "low_align_loss": low_align_loss,
         }

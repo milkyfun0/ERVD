@@ -4,6 +4,8 @@
 # @Author  : CaoQixuan
 # @File    : dataset.py
 # @Description :
+import math
+
 import numpy
 import torch
 from PIL import Image
@@ -12,23 +14,27 @@ from torch.nn import functional as F
 from torch.utils import data
 from torchvision import transforms
 
+from augment import GridMask, MixUp, CutMix, PatchMask, PatchUp, RandomErasing
+
 base_transform = transforms.Compose([
     transforms.Resize([224, 224]),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
 
 augment_transform = transforms.Compose([
-    transforms.RandomResizedCrop(224, scale=(0.2, 1.0)),
-    transforms.RandomApply(
-        [transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)], p=0.8  # not strengthened
-    ),
-    transforms.RandomGrayscale(p=0.2),
-    transforms.RandomApply([transforms.GaussianBlur(kernel_size=5, sigma=[0.1, 2.0])], p=0.8),
-    transforms.RandomHorizontalFlip(),
+    transforms.Resize([224, 224]),
+    # transforms.RandomResizedCrop(224, scale=(0.2, 1.0)),
+    # transforms.RandomApply(
+    #     [transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)], p=0.8  # not strengthened
+    # ),
+    # transforms.RandomGrayscale(p=0.2),
+    # transforms.RandomApply([transforms.GaussianBlur(kernel_size=5, sigma=[0.1, 2.0])], p=0.8),
+    # transforms.RandomHorizontalFlip(),
     transforms.ToTensor(),
-    transforms.Normalize(
-        mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
-    )])
+    # transforms.Normalize(
+    #     mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+    # )
+])
 
 
 class BaseDataset(data.Dataset):
@@ -134,72 +140,43 @@ class UCMD_Aug(BaseDataset):
         return data_pair
 
 
-class CoCo(BaseDataset):
-    def __init__(self, opt, flag):
-        self.transform = base_transform
-        super(CoCo, self).__init__(opt["path"], flag, self.transform)
-
-    def __getitem__(self, index):
-        data_pair = super(CoCo, self).__getitem__(index)
-        data_pair.pop('image_pil')
-        return data_pair
-
-
-class ImageNet(BaseDataset):
-    def __init__(self, opt, flag):
-        self.transform = base_transform
-        super(ImageNet, self).__init__(opt["path"], flag, self.transform)
-
-    def __getitem__(self, index):
-        data_pair = super(ImageNet, self).__getitem__(index)
-        data_pair.pop('image_pil')
-        return data_pair
-
-
 class Augment(nn.Module):
-    def __init__(self, image_size=224, patch_size=16, percent=0.5, alpha=0.4):
+    def __init__(self, opt, image_size=224, patch_size=16):
         super(Augment, self).__init__()
-        self.device_flag = nn.Linear(1, 1)
-        self.percent = percent
-        self.alpha = alpha
-        self.img_size = image_size
-        self.patch_size = patch_size
-        self.channels = 3
-        self.patch_num = (self.img_size // self.patch_size) ** 2
-        self.target_dtype = torch.float32
+        max_epoch = opt["train"]["epoch"]
+        if opt["dataset"]["aug_type"] == "gridmask":
+            self.augment = GridMask(max_epoch=max_epoch)
+        elif opt["dataset"]["aug_type"] == "mixup":
+            self.augment = MixUp()
+        elif opt["dataset"]["aug_type"] == "cutmix":
+            self.augment = CutMix()
+        elif opt["dataset"]["aug_type"] == "patchup":
+            self.augment = PatchUp()
+        elif opt["dataset"]["aug_type"] == "patchmask":
+            self.augment = PatchMask(max_epoch=max_epoch, image_size=image_size, patch_size=patch_size)
+        else:
+            self.augment = None
 
     @property
     def dtype(self):
-        return self.device_flag.weight.data.dtype
+        return self.augment.dtype
 
     @property
     def device(self):
-        return self.device_flag.weight.data.device
+        return self.augment.device
 
-    def forward(self, data_pair):
-        model_device = self.device
-        images, labels = data_pair["image"].to(model_device), data_pair["label"].to(model_device)
-        self.target_dtype = images.dtype
-        images, labels = images.type(self.dtype), labels.to(self.dtype)
+    def forward(self, data_pair, epoch=None):
+        images, labels = data_pair["image"].to(self.augment.device), data_pair["label"].to(self.augment.device)
+        if not self.training:
+            return images, labels
         if "augment_image" not in data_pair:
             return images, labels
-        images_augment = data_pair["augment_image"].to(model_device)
-        images_augment = images_augment.type(self.dtype)
 
-        batch_size = images.size(0)
-        mask_id = (torch.rand((batch_size, 1, self.patch_num)) < self.percent).to(torch.int32).to(images.device)
-        mask = torch.ones((batch_size, self.channels * self.patch_size * self.patch_size, 1),
-                          device=images.device) * mask_id
-        image_mask = F.fold(mask, kernel_size=self.patch_size, stride=self.patch_size, output_size=self.img_size)
-        indices = torch.arange(start=batch_size - 1, end=-1, step=-1).to(images.device)
-        images_augment = torch.index_select(images_augment, 0, indices)
-        # images_augment = images * (1 - image_mask) + (
-        #             images * (1 - self.alpha) + images_augment * self.alpha) * image_mask
+        augment_images = data_pair["augment_image"].to(self.device)
+        images_augment = self.augment(images, augment_images, epoch=epoch)
+        images = torch.cat((images, images_augment), dim=0)
+        labels = torch.cat((labels, labels), dim=0)
 
-        images_augment = images + self.alpha * image_mask * (images_augment - images)
-
-        images = torch.cat((images, images_augment), dim=0).type(self.dtype)
-        labels = torch.cat((labels, labels), dim=0).type(self.dtype)
         return images, labels
 
 
@@ -215,20 +192,33 @@ def get_loader(opt):
         batch_size=opt["train"]["batch_size"],
         num_workers=opt["train"]["num_works"],
         shuffle=True,
-        pin_memory=True,
-        drop_last=False
+        # pin_memory=True,
+        drop_last=True,
+        # prefetch_factor=2
+
     )
     test_loader = torch.utils.data.DataLoader(
         dataset=getattr(modules, config["name"])(
             opt=config,
             flag="test"
         ),
-        batch_size=opt["train"]["batch_size"],
+        batch_size=opt["train"]["batch_size"] * 2,
         num_workers=opt["train"]["num_works"],
         shuffle=False,
-        pin_memory=True
+        # pin_memory=True
     )
-    return train_loader, test_loader
+    dataset_loader = torch.utils.data.DataLoader(
+        dataset=getattr(modules, config["name"])(
+            opt=config,
+            flag="dataset"
+        ),
+        batch_size=opt["train"]["batch_size"] * 2,
+        num_workers=opt["train"]["num_works"],
+        shuffle=False,
+        # pin_memory=True,
+        # prefetch_factor=2
+    )
+    return train_loader, test_loader, dataset_loader
 
 
 if __name__ == '__main__':

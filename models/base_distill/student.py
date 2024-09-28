@@ -12,6 +12,7 @@ import torch
 from torch import nn
 
 from Collection import VarCollection
+from models.common import Adapter
 
 freeze_number = 3
 
@@ -43,6 +44,10 @@ class ResidualAttentionBlock(nn.Module):
             ("c_proj", nn.Linear(d_model * 4, d_model))
         ]))
         self.ln_2 = LayerNorm(d_model)
+
+        if is_adaptive:
+            self.adapter = Adapter(d_model)
+            self.ln_3 = LayerNorm(d_model)
         self.attn_mask = attn_mask
 
     @VarCollection("att_weight")
@@ -53,8 +58,15 @@ class ResidualAttentionBlock(nn.Module):
         return x  # 三个x表示Q K V计算值，x最后维度=n_head*d_model
 
     def forward(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor] = None):
-        x = x + self.attention(self.ln_1(x), attn_mask=attn_mask)
-        output = x + self.mlp(self.ln_2(x))
+        if self.is_adaptive:
+            step_1 = x + self.attention(self.ln_1(x), attn_mask=attn_mask)
+            step_2 = self.mlp(self.ln_2(step_1))
+            step_3 = step_2 + step_1
+            step_4 = self.adapter(step_3)
+            output = self.ln_3(step_4 + step_1)
+        else:
+            x = x + self.attention(self.ln_1(x), attn_mask=attn_mask)
+            output = x + self.mlp(self.ln_2(x))
         return output
 
 
@@ -69,6 +81,10 @@ class Transformer(nn.Module):
 
     def forward(self, x: torch.Tensor, attn_mask: Optional[torch.Tensor] = None):
         half_feature = []
+        # x = x.permute(1, 0, 2)
+        # prompt_token = self.prompt.to(x.dtype) + torch.zeros(x.shape[0], 1, x.shape[-1], dtype=x.dtype, device=x.device)
+        # x = torch.cat([x, prompt_token], dim=1)
+        # x = x.permute(1, 0, 2)
         for i in range(self.layers):
             if i == freeze_number:
                 x = x.detach()
@@ -99,6 +115,8 @@ class VisionTransformer(nn.Module):
         self.ln_post = LayerNorm(width)
         self.proj = nn.Parameter(scale * torch.randn(width, output_dim))
         self.iter = 0
+
+        # self.codebook = CodeBook(width, book_size=3096, alpha=0.5)
 
         self.writer = writer
         self.half_feature = None
@@ -193,6 +211,35 @@ def trans_standard_static_dict(state_dict: dict, layers=10):
         if "visual." in k:
             k = k[7:]
             state_dict[k] = v
+    # state_dict["proj"] = torch.cat([state_dict["proj"], state_dict["proj"]], dim=0)
+    # state_dict["ln_post.weight"] = torch.cat([state_dict["ln_post.weight"], state_dict["ln_post.weight"]], dim=-1)
+    # state_dict["ln_post.bias"] = torch.cat([state_dict["ln_post.bias"], state_dict["ln_post.bias"]], dim=-1)
+    # last_layer = 5
+    # for i in [0, 1]:
+    # state_dict["transformer.lowblocks.{}.attn.in_proj_weight".format(i)] = state_dict[
+    #     "transformer.resblocks.{}.attn.in_proj_weight".format(last_layer)]
+    # state_dict["transformer.lowblocks.{}.attn.in_proj_bias".format(i)] = state_dict[
+    #     "transformer.resblocks.{}.attn.in_proj_bias".format(last_layer)]
+    # state_dict["transformer.lowblocks.{}.attn.out_proj.weight".format(i)] = state_dict[
+    #     "transformer.resblocks.{}.attn.out_proj.weight".format(last_layer)]
+    # state_dict["transformer.lowblocks.{}.attn.out_proj.bias".format(i)] = state_dict[
+    #     "transformer.resblocks.{}.attn.out_proj.bias".format(last_layer)]
+    # state_dict["transformer.lowblocks.{}.mlp.c_fc.weight".format(i)] = state_dict[
+    #     "transformer.resblocks.{}.mlp.c_fc.weight".format(last_layer)]
+    # state_dict["transformer.lowblocks.{}.mlp.c_fc.bias".format(i)] = state_dict[
+    #     "transformer.resblocks.{}.mlp.c_fc.bias".format(last_layer)]
+    # state_dict["transformer.lowblocks.{}.mlp.c_proj.weight".format(i)] = state_dict[
+    #     "transformer.resblocks.{}.mlp.c_proj.weight".format(last_layer)]
+    # state_dict["transformer.lowblocks.{}.mlp.c_proj.bias".format(i)] = state_dict[
+    #     "transformer.resblocks.{}.mlp.c_proj.bias".format(last_layer)]
+    # state_dict["transformer.lowblocks.{}.ln_1.weight".format(i)] = state_dict[
+    #     "transformer.resblocks.{}.ln_1.weight".format(last_layer)]
+    # state_dict["transformer.lowblocks.{}.ln_1.bias".format(i)] = state_dict[
+    #     "transformer.resblocks.{}.ln_1.bias".format(last_layer)]
+    # state_dict["transformer.lowblocks.{}.ln_2.weight".format(i)] = state_dict[
+    #     "transformer.resblocks.{}.ln_2.weight".format(last_layer)]
+    # state_dict["transformer.lowblocks.{}.ln_2.bias".format(i)] = state_dict[
+    #     "transformer.resblocks.{}.ln_2.bias".format(last_layer)]
 
     return state_dict
 

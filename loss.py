@@ -79,6 +79,33 @@ def calc_contrastive_loss_part(
     loss = -1 * (mask * log_prob).sum(dim=1) / mask_sum.detach()
     return loss.mean()
 
+
+# def calc_triple_loss(features: torch.Tensor, labels, margin: torch.float):
+#     """
+#      learn from: Exploring a Fine-Grained Multiscale Method for Cross-Modal Remote Sensing Image Retrieval
+#     :param labels:
+#     :param features:
+#     :param margin:
+#     有问题，这里：triple0（自己写）
+#     :return:
+#     """
+#     scores = calc_distance(features, features, dis_type="batch_dot")
+#
+#     image_len, text_len = scores.shape
+#     assert image_len == text_len
+#     positive = (labels.reshape(-1, 1) == labels.reshape(1, -1)).to(torch.int32)
+#     i2t_positive = positive
+#     t2i_positive = positive
+#     mask = 1 - positive  # torch.eye(image_len, device=scores.device)
+#
+#     loss_i2t = (margin + scores - i2t_positive).clamp(min=0) * mask + (1 - scores).clamp(min=0) * (1 - mask)
+#     loss_t2i = (margin + scores - t2i_positive).clamp(min=0) * mask + (1 - scores).clamp(min=0) * (1 - mask)
+#
+#     # loss = (loss_i2t + loss_t2i) / len(loss_t2i)^2
+#     loss = (loss_i2t.sum() + loss_t2i.sum()) / len(loss_t2i) ** 2
+#
+#     return loss
+
 def calc_triple_loss(features: torch.Tensor, labels, margin: torch.float):
     """
     learn from git from SCFR : https://github.com/xdplay17/SCFR
@@ -93,6 +120,9 @@ def calc_triple_loss(features: torch.Tensor, labels, margin: torch.float):
     loss = R * scores + (1.0 - R) * (margin - scores).clamp(min=0.0)
     loss_mean = loss.sum() / (features.size(0) ** 2)
     return loss_mean
+
+
+#     return loss
 
 
 def calc_cluster_loss(feature: torch.Tensor, centers: torch.Tensor, labels: torch.Tensor, margin,
@@ -152,3 +182,9 @@ def calc_cls_loss(logistic: torch.Tensor, labels: torch.Tensor):
 def calc_l2_loss(feature_student: torch.Tensor, feature_teacher: torch.Tensor):
     distance = torch.norm(feature_student - feature_teacher)
     return distance.sum() / feature_student.size(0)
+# if __name__ == '__main__':
+#     opt = get_options(model_name="base_work")
+#     feature = torch.load("feature.pt")
+#     label = torch.load("label.pt")
+#     center = torch.load("center.pt")
+#     calc_loss(opt=opt, feature=feature, centers=center, labels=label)

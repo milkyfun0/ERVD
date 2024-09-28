@@ -43,6 +43,12 @@ class LossMemory:
         self.new_epoch = -1
         self.step = -1
 
+    def average(self):
+        loss = {}
+        for k, v in self.losses.items():
+            loss[k] = sum(v) / len(v)
+        return loss
+
     def to_string(self):
         info_string = ""
         for k, v in self.losses.items():
@@ -70,7 +76,7 @@ def get_device(i=None):
     return torch.device('cpu')
 
 
-def same_seeds(seed: int):
+def same_seeds(seed: int = 42):
     os.environ['PYTHONHASHSEED'] = str(seed)
     random.seed(seed)
     torch.manual_seed(seed)
@@ -172,7 +178,7 @@ def generate_random_samples(options, percent=0.7):
 def save_log_txt(writer, log: str):
     print(log, end="")
     with open(writer.log_dir + "log.txt", mode="a+", encoding="utf-8") as f:
-        f.write(log)
+        f.write(str(log))
 
 
 def save_params_config(writer, params: dict):
@@ -284,40 +290,106 @@ def validate_with_no_cross(opt, model, train_loader, test_loader):
     :param opt:
     :return:
     """
-    model.eval()
-    model_device = get_device()
+    model_device = get_device()  # 获取要使用的设备，如 'cuda:0' 或 'cpu'
+
+    # 如果模型被封装为 DataParallel，提取其中的原始模型
+    if isinstance(model, torch.nn.DataParallel):
+        model = model.module  # 解封装 DataParallel
+
+    # 设置模型到单个设备
+    model.to(model_device)
+
+    # 获取数据集长度和其他相关参数
     train_len = len(train_loader.dataset)
     test_len = len(test_loader.dataset)
     batch_size = test_loader.batch_size
-    data_type = torch.float16
-    embedding_dim = opt["model"]["hash_bit"]
+    data_type = torch.float16  # 使用的精度类型
+    embedding_dim = opt["model"]["hash_bit"]  # 嵌入维度
 
+    # 创建空的张量来存储相似度和标签
     sim = torch.empty((train_len, test_len), device=model_device, dtype=data_type)
     train_labels = torch.empty(train_len, device=model_device, dtype=torch.int16)
     test_labels = torch.empty(test_len, device=model_device, dtype=torch.int16)
-
     test_features = torch.empty((test_len, embedding_dim), device=model_device, dtype=data_type)
 
+    # 处理测试数据
     for data_pair, i in zip(test_loader, tqdm(range(len(test_loader)))):
-        if type(model) is torch.nn.DataParallel:
-            features = model.module.encode(data_pair)
-        else:
-            features = model.encode(data_pair)
+        # 直接调用模型的 encode 方法，因为模型已经被移动到单卡上
+        features = model.encode(data_pair)
+
+        # 获取批次长度
         batch_len_image = len(features)
+
+        # 存储特征和标签
         test_features[batch_size * i:batch_size * i + batch_len_image] = features
         test_labels[batch_size * i:batch_size * i + batch_len_image] = data_pair["label"].to(model_device)
 
+    # 处理训练数据
     for data_pair, i in zip(train_loader, tqdm(range(len(train_loader)))):
-        torch.cuda.empty_cache()
-        gc.collect()
-        if type(model) is torch.nn.DataParallel:
-            features = model.module.encode(data_pair)
-        else:
-            features = model.encode(data_pair)
-        batch_len_image = len(features)
-        train_labels[batch_size * i:batch_size * i + batch_len_image] = data_pair["label"].to(model_device)
-        sim[batch_size * i:batch_size * i + batch_len_image, :] = calc_distance(features.to(data_type), test_features,
-                                                                                dis_type=opt["model"]["dis_type"])
+        torch.cuda.empty_cache()  # 清空缓存以减少显存占用
+        gc.collect()  # 手动进行垃圾回收
 
-    return validate_on_tensor(sim.T, test_labels, train_labels,
+        # 同样直接调用模型的 encode 方法
+        features = model.encode(data_pair)
+        batch_len_image = len(features)
+
+        # 存储训练数据的标签和相似度计算结果
+        train_labels[batch_size * i:batch_size * i + batch_len_image] = data_pair["label"].to(model_device)
+        sim[batch_size * i:batch_size * i + batch_len_image, :] = calc_distance(
+            features.to(data_type),
+            test_features,
+            dis_type=opt["model"]["dis_type"]
+        )
+    # 调用 validate_on_tensor 函数进行最终验证
+    return validate_on_tensor(sim.T.cpu(), test_labels.cpu(), train_labels.cpu(),
                               metric_dict=opt["dataset"][opt["dataset"]["type"]]["metric"])
+    # return validate_on_tensor(sim.T, test_labels, train_labels,
+    #                           metric_dict=opt["dataset"][opt["dataset"]["type"]]["metric"])
+# @torch.no_grad()
+# def validate_with_no_cross(opt, model, train_loader, test_loader):
+#     """
+#     :param train_loader:
+#     :param test_loader:
+#     :param model:
+#     :param opt:
+#     :return:
+#     """
+#     model_device = get_device()
+#     train_len = len(train_loader.dataset)
+#     test_len = len(test_loader.dataset)
+#     batch_size = test_loader.batch_size
+#     data_type = torch.float16
+#     embedding_dim = opt["model"]["hash_bit"]
+#
+#     sim = torch.empty((train_len, test_len), device=model_device, dtype=data_type)
+#     train_labels = torch.empty(train_len, device=model_device, dtype=torch.int16)
+#     test_labels = torch.empty(test_len, device=model_device, dtype=torch.int16)
+#
+#     test_features = torch.empty((test_len, embedding_dim), device=model_device, dtype=data_type)
+#
+#     for data_pair, i in zip(test_loader, tqdm(range(len(test_loader)))):
+#         if type(model) is torch.nn.DataParallel:
+#             features = model.module.encode(data_pair)
+#         else:
+#             features = model.encode(data_pair)
+#         batch_len_image = len(features)
+#         test_features[batch_size * i:batch_size * i + batch_len_image] = features
+#         test_labels[batch_size * i:batch_size * i + batch_len_image] = data_pair["label"].to(model_device)
+#
+#     for data_pair, i in zip(train_loader, tqdm(range(len(train_loader)))):
+#         torch.cuda.empty_cache()
+#         gc.collect()
+#         if type(model) is torch.nn.DataParallel:
+#             features = model.module.encode(data_pair)
+#         else:
+#             features = model.encode(data_pair)
+#         batch_len_image = len(features)
+#         train_labels[batch_size * i:batch_size * i + batch_len_image] = data_pair["label"].to(model_device)
+#         sim[batch_size * i:batch_size * i + batch_len_image, :] = calc_distance(features.to(data_type), test_features,
+#                                                                                 dis_type=opt["model"]["dis_type"])
+#
+#     return validate_on_tensor(sim.T.cpu(), test_labels.cpu(), train_labels.cpu(),
+#                               metric_dict=opt["dataset"][opt["dataset"]["type"]]["metric"])
+#     # return validate_on_tensor(sim.T, test_labels, train_labels,
+#     #                           metric_dict=opt["dataset"][opt["dataset"]["type"]]["metric"])
+# # #
