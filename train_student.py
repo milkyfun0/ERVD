@@ -88,7 +88,6 @@ def main(opt, gpus=False):
         model = torch.nn.DataParallel(model, device_ids=utils.get_devices()).to(get_device())
     else:
         model.to(get_device())
-    # model = torch.nn.DataParallel(model, device_ids=utils.get_devices()).to(get_device())
     utils.save_params_config(writer, opt)
     train(opt=opt, model=model, train_loader=train_loader, test_loader=test_loader, dataset_loader=dataset_loader,
           writer=writer)
@@ -100,6 +99,3 @@ if __name__ == "__main__":
     """
     opt = get_options(model_name="base_distill")
     main(opt)
-# https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=10065512
-# https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=10271121
-# https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=10025702

@@ -1,7 +1,7 @@
 model:
   name: "base_distill"
   pretrained: True
-  hash_bit: 128
+  hash_bit: 256
   dis_type: "hamming" # validate
   teacher:
     config_path: "models_data/base_distill/teacher/"
