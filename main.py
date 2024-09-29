@@ -92,6 +92,3 @@ if __name__ == "__main__":
         os.environ["CUDA_DEVICE_ORDER"] = "PCI_BS_ID"
         main(options, gpus=True)
 
-# source activate CqxTorch
-# cd /home/caoqixuan/GitImageRetrieval/
-# python main.py --gpus 5,6 --batch_size 256 --path base_vit --hash_bit 128

@@ -74,18 +74,14 @@
 ### Train Teacher Network 
 
 1.  configure **base_vit/config.yaml**
-2.  Run **train.py** if you have a single GPU environment, otherwise run **train_server.py** after configuring **CUDA_VISIBLE_DEVICES**
 3.  Place the trained weights under **logs/base_vit/** to **model_data/base_distill/teacher/**
+3.  run **run_teacher.sh**
 
 ### Train Distill Network
 
 1. configure **base_distill/config.yaml**
-2.  change "opt = get_options(model_name="base_vit")" to "opt = get_options(model_name="base_distill")"
-3. run it :wink:
-
-**If you want to test other models, just add the model to model/model_name/ and the relevant weight configuration to model_data/model_name/,Note that the underlying network requires rewriting the show() function and encode() and forward()**
-
-
+2. Enter the teacher path in **run.sh**
+3. run **run.sh**
 
 
 # Acknowledge

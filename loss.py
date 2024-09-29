@@ -7,7 +7,7 @@
 import torch
 from torch import nn
 
-from utils import get_options, calc_distance
+from utils import calc_distance
 
 
 def calc_contrastive_loss(
