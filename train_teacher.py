@@ -18,7 +18,7 @@ from dataset import get_loader
 from models.base_distill import base_distall
 from models.base_vit import base_vit
 from optimizer import Optimizer
-from utils import save_log_txt, validate_with_no_cross, same_seeds, get_options, get_device
+from utils import save_log_txt, same_seeds, get_options, get_device
 
 
 def train(opt, model, train_loader, test_loader, dataset_loader, writer):
