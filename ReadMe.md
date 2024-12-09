@@ -3,7 +3,7 @@
 **
 ## Abstract
 
-- ***18 May 2024*** models have been integrated into [hugging face](https://huggingface.co/milkyfun0/ModelWeight)
+- ***18 Sep 2024*** models have been integrated into [hugging face](https://huggingface.co/milkyfun0/ModelWeight)
 - ***18 May 2024*** This is preliminary released code, including training code and checkpoints. 
 
 ## Project file structure
