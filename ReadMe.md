@@ -1,5 +1,5 @@
 # Introduction
-(An Efficient and Robust ViT-Based Distillation Framework for Hash Remote Sensing Image Retrieval)[https://arxiv.org/abs/2412.18136]
+[An Efficient and Robust ViT-Based Distillation Framework for Hash Remote Sensing Image Retrieval](https://arxiv.org/abs/2412.18136)
 ## Abstract
 
 - ***18 Sep 2024*** models have been integrated into [hugging face](https://huggingface.co/milkyfun0/ModelWeight)
